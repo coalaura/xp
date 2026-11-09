@@ -1,4 +1,4 @@
-![banner](.github/banner.svg)
+![xp banner](.github/banner.png)
 
 A small Go library for desktop windows with Windows XP's blue Luna look, plus a demo application. The frame and controls are custom-drawn, with DPI scaling, keyboard navigation and window-manager integration.
 
