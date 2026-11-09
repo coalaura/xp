@@ -1,9 +1,10 @@
-// Command reference extracts text-free Luna artwork from the XP VM captures.
+// Command reference extracts text-free Luna artwork from the XP UI state atlas.
 package main
 
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"os"
 )
@@ -11,6 +12,111 @@ import (
 type crop struct {
 	file   string
 	bounds image.Rectangle
+}
+
+type artwork struct {
+	path    string
+	crops   []crop
+	columns []int
+}
+
+var artworks = []artwork{
+	{
+		path: "theme/caption.png",
+		crops: []crop{
+			{file: "09_frames", bounds: image.Rect(923, 92, 944, 113)},
+			{file: "08_caption", bounds: image.Rect(492, 296, 513, 317)},
+			{file: "08_caption", bounds: image.Rect(676, 296, 697, 317)},
+			{file: "09_frames", bounds: image.Rect(946, 92, 967, 113)},
+			{file: "08_caption", bounds: image.Rect(492, 368, 513, 389)},
+			{file: "08_caption", bounds: image.Rect(676, 368, 697, 389)},
+			{file: "08_caption", bounds: image.Rect(308, 512, 329, 533)},
+			{file: "08_caption", bounds: image.Rect(492, 512, 513, 533)},
+			{file: "08_caption", bounds: image.Rect(676, 512, 697, 533)},
+			{file: "09_frames", bounds: image.Rect(969, 92, 990, 113)},
+			{file: "08_caption", bounds: image.Rect(492, 404, 513, 425)},
+			{file: "08_caption", bounds: image.Rect(676, 404, 697, 425)},
+		},
+	},
+	{
+		path: "theme/inactive.png",
+		crops: []crop{
+			{file: "00_inactive", bounds: image.Rect(923, 92, 944, 113)},
+			{file: "00_inactive", bounds: image.Rect(946, 92, 967, 113)},
+			{file: "00_inactive", bounds: image.Rect(946, 92, 967, 113)},
+			{file: "00_inactive", bounds: image.Rect(969, 92, 990, 113)},
+		},
+	},
+	{
+		path: "ui/checkbox.png",
+		crops: []crop{
+			{file: "01_buttons", bounds: image.Rect(252, 293, 265, 306)},
+			{file: "01_buttons", bounds: image.Rect(399, 293, 412, 306)},
+			{file: "01_buttons", bounds: image.Rect(546, 293, 559, 306)},
+			{file: "01_buttons", bounds: image.Rect(693, 293, 706, 306)},
+			{file: "01_buttons", bounds: image.Rect(252, 331, 265, 344)},
+			{file: "01_buttons", bounds: image.Rect(399, 331, 412, 344)},
+			{file: "01_buttons", bounds: image.Rect(546, 331, 559, 344)},
+			{file: "01_buttons", bounds: image.Rect(693, 331, 706, 344)},
+		},
+	},
+	{
+		path: "ui/button.png",
+		crops: []crop{
+			{file: "01_buttons", bounds: image.Rect(244, 249, 356, 275)},
+			{file: "01_buttons", bounds: image.Rect(391, 249, 503, 275)},
+			{file: "01_buttons", bounds: image.Rect(538, 249, 650, 275)},
+			{file: "01_buttons", bounds: image.Rect(685, 249, 797, 275)},
+			{file: "01_buttons", bounds: image.Rect(832, 249, 944, 275)},
+		},
+		// Keep the ends and a text-free center column for nine-slice rendering.
+		columns: []int{0, 1, 2, 3, 12, 108, 109, 110, 111},
+	},
+	{
+		path: "theme/frame.png",
+		crops: []crop{
+			{file: "09_frames", bounds: image.Rect(28, 116, 996, 780)},
+			{file: "00_inactive", bounds: image.Rect(28, 116, 996, 780)},
+		},
+		columns: []int{0, 1, 2, 3, 472, 964, 965, 966, 967},
+	},
+	{
+		path: "theme/dialog.png",
+		// The gallery has no native dialog: retain the inner three frame columns.
+		crops: []crop{
+			{file: "09_frames", bounds: image.Rect(29, 116, 995, 780)},
+			{file: "00_inactive", bounds: image.Rect(29, 116, 995, 780)},
+		},
+		columns: []int{0, 1, 2, 471, 963, 964, 965},
+	},
+	{
+		path: "theme/bottom.png",
+		crops: []crop{
+			{file: "09_frames", bounds: image.Rect(28, 776, 996, 780)},
+			{file: "00_inactive", bounds: image.Rect(28, 776, 996, 780)},
+		},
+	},
+	{
+		path: "theme/dialog_bottom.png",
+		crops: []crop{
+			{file: "09_frames", bounds: image.Rect(29, 777, 995, 780)},
+			{file: "00_inactive", bounds: image.Rect(29, 777, 995, 780)},
+		},
+	},
+	{
+		path: "theme/title.png",
+		crops: []crop{
+			{file: "09_frames", bounds: image.Rect(500, 86, 501, 116)},
+			{file: "00_inactive", bounds: image.Rect(500, 86, 501, 116)},
+		},
+	},
+	{
+		path: "theme/title_maximized.png",
+		crops: []crop{
+			{file: "09_frames", bounds: image.Rect(350, 353, 351, 377)},
+			{file: "09_frames", bounds: image.Rect(596, 353, 597, 377)},
+		},
+	},
 }
 
 func main() {
@@ -22,126 +128,119 @@ func main() {
 }
 
 func generate() error {
-	caption := []crop{
-		{file: "04", bounds: image.Rect(820, 113, 841, 134)},
-		{file: "04", bounds: image.Rect(843, 113, 864, 134)},
-		{file: "03", bounds: image.Rect(978, 66, 999, 87)},
-		{file: "04", bounds: image.Rect(866, 113, 887, 134)},
-	}
+	captures := make(map[string]image.Image, 4)
 
-	err := writeArtwork("theme/inactive.png", caption, nil)
-	if err != nil {
-		return err
-	}
+	for _, specification := range artworks {
+		atlas, err := extractArtwork(specification, captures)
+		if err != nil {
+			return fmt.Errorf("%s: %w", specification.path, err)
+		}
 
-	maximized := []crop{
-		{file: "03", bounds: image.Rect(955, 66, 976, 87)},
-		{file: "03", bounds: image.Rect(978, 66, 999, 87)},
-		{file: "03", bounds: image.Rect(1001, 66, 1022, 87)},
-	}
+		if specification.path == "theme/inactive.png" {
+			restoreInactive(atlas, captures)
+		}
 
-	err = writeArtwork("theme/inactive_maximized.png", maximized, nil)
-	if err != nil {
-		return err
-	}
-
-	checkbox := []crop{
-		{file: "10", bounds: image.Rect(361, 486, 374, 499)},
-		{file: "12", bounds: image.Rect(361, 486, 374, 499)},
-		{file: "07", bounds: image.Rect(361, 486, 374, 499)},
-	}
-
-	err = writeArtwork("ui/checkbox.png", checkbox, nil)
-	if err != nil {
-		return err
-	}
-
-	button := []crop{
-		{file: "08", bounds: image.Rect(478, 489, 551, 510)},
-		{file: "09", bounds: image.Rect(478, 489, 551, 510)},
-	}
-
-	// Keep the ends and a text-free center column for nine-slice rendering.
-	buttonColumns := []int{0, 1, 2, 3, 12, 69, 70, 71, 72}
-
-	err = writeArtwork("ui/button.png", button, buttonColumns)
-	if err != nil {
-		return err
-	}
-
-	frame := []crop{
-		{file: "01", bounds: image.Rect(93, 137, 893, 707)},
-		{file: "04", bounds: image.Rect(93, 137, 893, 707)},
-	}
-
-	frameColumns := []int{0, 1, 2, 3, 400, 796, 797, 798, 799}
-
-	err = writeArtwork("theme/frame.png", frame, frameColumns)
-	if err != nil {
-		return err
-	}
-
-	dialog := []crop{
-		{file: "10", bounds: image.Rect(304, 355, 685, 516)},
-	}
-
-	dialogColumns := []int{0, 1, 2, 190, 378, 379, 380}
-
-	err = writeArtwork("theme/dialog.png", dialog, dialogColumns)
-	if err != nil {
-		return err
-	}
-
-	bottom := []crop{
-		{file: "01", bounds: image.Rect(93, 703, 893, 707)},
-		{file: "04", bounds: image.Rect(93, 703, 893, 707)},
-	}
-
-	err = writeArtwork("theme/bottom.png", bottom, nil)
-	if err != nil {
-		return err
-	}
-
-	dialogBottom := []crop{
-		{file: "10", bounds: image.Rect(304, 513, 685, 516)},
-	}
-
-	return writeArtwork("theme/dialog_bottom.png", dialogBottom, nil)
-}
-
-func writeArtwork(path string, crops []crop, columns []int) error {
-	width := crops[0].bounds.Dx()
-	height := crops[0].bounds.Dy()
-
-	if columns != nil {
-		width = len(columns)
-	}
-
-	atlas := image.NewNRGBA(image.Rect(0, 0, width, height*len(crops)))
-
-	for index, source := range crops {
-		capture, err := readCapture(source.file)
+		err = writeArtwork(specification.path, atlas)
 		if err != nil {
 			return err
 		}
+	}
 
-		if !source.bounds.In(capture.Bounds()) {
-			return fmt.Errorf("reference %s: crop outside image", source.file)
+	return nil
+}
+
+func extractArtwork(specification artwork, captures map[string]image.Image) (*image.NRGBA, error) {
+	if len(specification.crops) == 0 {
+		return nil, fmt.Errorf("no crops")
+	}
+
+	size := specification.crops[0].bounds.Size()
+	width := size.X
+	if specification.columns != nil {
+		width = len(specification.columns)
+	}
+
+	for _, column := range specification.columns {
+		if column < 0 || column >= size.X {
+			return nil, fmt.Errorf("column %d outside crop", column)
+		}
+	}
+
+	atlas := image.NewNRGBA(image.Rect(0, 0, width, size.Y*len(specification.crops)))
+
+	for index, source := range specification.crops {
+		capture := captures[source.file]
+		if capture == nil {
+			var err error
+
+			capture, err = readCapture(source.file)
+			if err != nil {
+				return nil, err
+			}
+
+			captures[source.file] = capture
 		}
 
-		for vertical := range height {
+		if source.bounds.Size() != size || source.bounds.Empty() || !source.bounds.In(capture.Bounds()) {
+			return nil, fmt.Errorf("reference %s: invalid crop %v", source.file, source.bounds)
+		}
+
+		for vertical := range size.Y {
 			for horizontal := range width {
 				column := horizontal
-
-				if columns != nil {
-					column = columns[horizontal]
+				if specification.columns != nil {
+					column = specification.columns[horizontal]
 				}
 
-				atlas.Set(horizontal, index*height+vertical, capture.At(source.bounds.Min.X+column, source.bounds.Min.Y+vertical))
+				atlas.Set(horizontal, index*size.Y+vertical, capture.At(source.bounds.Min.X+column, source.bounds.Min.Y+vertical))
 			}
 		}
 	}
 
+	return atlas, nil
+}
+
+func restoreInactive(atlas *image.NRGBA, captures map[string]image.Image) {
+	active := captures["09_frames"]
+	restore := captures["08_caption"]
+	inactive := captures["00_inactive"]
+
+	// No inactive restore is captured. Transfer the normal restore glyph onto
+	// the inactive face, matching the paired native buttons on each scanline.
+	for vertical := 3; vertical < 18; vertical++ {
+		for horizontal := 3; horizontal < 18; horizontal++ {
+			pixel := color.NRGBAModel.Convert(restore.At(308+horizontal, 512+vertical)).(color.NRGBA)
+			if pixel.R == 255 && pixel.G == 255 && pixel.B == 255 {
+				atlas.SetNRGBA(horizontal, 42+vertical, pixel)
+
+				continue
+			}
+
+			bestDistance := int(^uint(0) >> 1)
+			var matched color.Color
+
+			for candidate := 3; candidate < 18; candidate++ {
+				for button := range 2 {
+					left := 923 + button*23
+					original := color.NRGBAModel.Convert(active.At(left+candidate, 92+vertical)).(color.NRGBA)
+					red := int(original.R) - int(pixel.R)
+					green := int(original.G) - int(pixel.G)
+					blue := int(original.B) - int(pixel.B)
+					distance := red*red + green*green + blue*blue
+
+					if distance < bestDistance || distance == bestDistance && candidate == horizontal {
+						bestDistance = distance
+						matched = inactive.At(left+candidate, 92+vertical)
+					}
+				}
+			}
+
+			atlas.Set(horizontal, 42+vertical, matched)
+		}
+	}
+}
+
+func writeArtwork(path string, atlas image.Image) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err
