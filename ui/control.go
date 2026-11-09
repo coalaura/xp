@@ -12,6 +12,24 @@ const (
 	Button
 	Separator
 	Checkbox
+	Heading
+	Link
+	Radio
+	Slider
+	Input
+	ComboBox
+	SunkenEdge
+	RaisedEdge
+	Group
+)
+
+// Text is the descriptive name for a label; Label remains supported.
+const Text = Label
+
+const (
+	Unchecked CheckState = iota
+	Checked
+	Mixed
 )
 
 const (
@@ -20,6 +38,9 @@ const (
 	Top
 	Bottom
 )
+
+// CheckState is the logical state of a checkbox or radio button.
+type CheckState uint8
 
 // Kind identifies a supported control.
 type Kind uint8
@@ -42,6 +63,24 @@ type Control struct {
 	Default  bool
 	Cancel   bool
 	Checked  bool
+	// Mixed and Checked are mutually exclusive. ThreeState cycles through all three states.
+	Mixed      bool
+	ThreeState bool
+	// RadioGroup identifies mutually exclusive radio buttons, independently of visual groups.
+	RadioGroup string
+	// Vertical applies to sliders and separators. Slider values increase downwards vertically.
+	Vertical bool
+	// Min, Max, Value and Step describe a slider. Step zero means one.
+	Min   int
+	Max   int
+	Value int
+	Step  int
+	// Password and ReadOnly apply to single-line inputs.
+	Password bool
+	ReadOnly bool
+	// Items and Selected describe a list-only combo box. Selected -1 means no selection.
+	Items    []string
+	Selected int
 }
 
 // State is the current interactive appearance of a control.
@@ -49,11 +88,22 @@ type State struct {
 	Hot     bool
 	Pressed bool
 	Focused bool
+	// ActiveFocus includes mouse focus, independently of keyboard focus cues.
+	ActiveFocus bool
 }
 
 // Interactive reports whether a control accepts mouse and keyboard input.
 func (control Control) Interactive() bool {
-	return !control.Disabled && (control.Kind == Button || control.Kind == Checkbox)
+	if control.Disabled {
+		return false
+	}
+
+	switch control.Kind {
+	case Button, Checkbox, Link, Radio, Slider, Input, ComboBox:
+		return true
+	default:
+		return false
+	}
 }
 
 // Rectangle resolves the control's physical bounds from the original outer
@@ -92,28 +142,22 @@ func Draw(surface theme.Surface, layout theme.Layout, rectangle image.Rectangle,
 		return
 	}
 
-	one := layout.Scale(1)
+	surface = surface.Clipped(rectangle)
 
-	if control.Kind == Separator {
-		surface.Fill(image.Rect(rectangle.Min.X, rectangle.Min.Y, rectangle.Max.X, rectangle.Min.Y+one), 0xACA899)
-		surface.Fill(image.Rect(rectangle.Min.X, rectangle.Min.Y+one, rectangle.Max.X, rectangle.Min.Y+2*one), 0xFFFFFF)
-
-		return
-	}
-
-	if control.Kind == Checkbox {
+	switch control.Kind {
+	case Separator, SunkenEdge, RaisedEdge, Group:
+		drawDecoration(surface, layout, rectangle, control)
+	case Checkbox, Radio:
 		drawCheckbox(surface.Clipped(rectangle), layout, rectangle, control, state)
+	case Slider:
+		drawSlider(surface, layout, rectangle, control, state)
+	case Input, ComboBox:
+		drawField(surface, layout, rectangle, control, state)
+	case Button:
+		drawReferenceButton(surface, layout, rectangle, control, state)
 
-		return
-	}
-
-	if control.Kind != Button {
-		return
-	}
-
-	drawReferenceButton(surface, layout, rectangle, control, state)
-
-	if state.Focused && !control.Disabled {
-		DrawFocus(surface, layout, rectangle.Inset(layout.Scale(4)))
+		if state.Focused && !control.Disabled {
+			DrawFocus(surface, layout, rectangle.Inset(layout.Scale(4)))
+		}
 	}
 }

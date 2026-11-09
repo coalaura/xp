@@ -65,6 +65,77 @@ var artworks = []artwork{
 			{file: "01_buttons", bounds: image.Rect(399, 331, 412, 344)},
 			{file: "01_buttons", bounds: image.Rect(546, 331, 559, 344)},
 			{file: "01_buttons", bounds: image.Rect(693, 331, 706, 344)},
+			{file: "01_buttons", bounds: image.Rect(252, 369, 265, 382)},
+			{file: "01_buttons", bounds: image.Rect(399, 369, 412, 382)},
+			{file: "01_buttons", bounds: image.Rect(546, 369, 559, 382)},
+			{file: "01_buttons", bounds: image.Rect(693, 369, 706, 382)},
+		},
+	},
+	{
+		path: "ui/radio.png",
+		crops: []crop{
+			{file: "01_buttons", bounds: image.Rect(252, 407, 265, 420)},
+			{file: "01_buttons", bounds: image.Rect(399, 407, 412, 420)},
+			{file: "01_buttons", bounds: image.Rect(546, 407, 559, 420)},
+			{file: "01_buttons", bounds: image.Rect(693, 407, 706, 420)},
+			{file: "01_buttons", bounds: image.Rect(252, 445, 265, 458)},
+			{file: "01_buttons", bounds: image.Rect(399, 445, 412, 458)},
+			{file: "01_buttons", bounds: image.Rect(546, 445, 559, 458)},
+			{file: "01_buttons", bounds: image.Rect(693, 445, 706, 458)},
+		},
+	},
+	{
+		path: "ui/input.png",
+		crops: []crop{
+			{file: "02_inputs", bounds: image.Rect(233, 250, 344, 273)},
+			{file: "02_inputs", bounds: image.Rect(356, 250, 467, 273)},
+			{file: "02_inputs", bounds: image.Rect(479, 250, 590, 273)},
+			{file: "02_inputs", bounds: image.Rect(602, 250, 713, 273)},
+			{file: "02_inputs", bounds: image.Rect(725, 250, 836, 273)},
+		},
+	},
+	{
+		path: "ui/combo.png",
+		crops: []crop{
+			{file: "02_inputs", bounds: image.Rect(376, 394, 393, 416)},
+			{file: "02_inputs", bounds: image.Rect(560, 394, 577, 416)},
+			{file: "02_inputs", bounds: image.Rect(744, 394, 761, 416)},
+			{file: "02_inputs", bounds: image.Rect(928, 394, 945, 416)},
+		},
+	},
+	{
+		path: "ui/slider.png",
+		crops: []crop{
+			{file: "06_sliders", bounds: image.Rect(294, 224, 305, 245)},
+			{file: "06_sliders", bounds: image.Rect(441, 224, 452, 245)},
+			{file: "06_sliders", bounds: image.Rect(588, 224, 599, 245)},
+			{file: "06_sliders", bounds: image.Rect(735, 224, 746, 245)},
+			{file: "06_sliders", bounds: image.Rect(882, 224, 893, 245)},
+		},
+	},
+	{
+		path: "ui/slider_vertical.png",
+		crops: []crop{
+			{file: "06_sliders", bounds: image.Rect(289, 337, 310, 348)},
+			{file: "06_sliders", bounds: image.Rect(436, 337, 457, 348)},
+			{file: "06_sliders", bounds: image.Rect(583, 337, 604, 348)},
+			{file: "06_sliders", bounds: image.Rect(730, 337, 751, 348)},
+			{file: "06_sliders", bounds: image.Rect(877, 337, 898, 348)},
+		},
+	},
+	{
+		path:  "ui/track.png",
+		crops: []crop{{file: "06_sliders", bounds: image.Rect(311, 469, 511, 474)}},
+	},
+	{
+		path:  "ui/track_vertical.png",
+		crops: []crop{{file: "06_sliders", bounds: image.Rect(778, 487, 783, 519)}},
+	},
+	{
+		path: "ui/group.png",
+		crops: []crop{
+			{file: "01_buttons", bounds: image.Rect(244, 482, 356, 510)},
+			{file: "01_buttons", bounds: image.Rect(685, 482, 797, 510)},
 		},
 	},
 	{
@@ -136,7 +207,7 @@ func main() {
 }
 
 func generate() error {
-	captures := make(map[string]image.Image, 4)
+	captures := make(map[string]image.Image, 6)
 
 	for _, specification := range artworks {
 		atlas, err := extractArtwork(specification, captures)
@@ -154,6 +225,10 @@ func generate() error {
 
 		if specification.path == "ui/button.png" {
 			removeButtonLabels(atlas)
+		}
+
+		if specification.path == "ui/group.png" {
+			removeGroupLabels(atlas)
 		}
 
 		err = writeArtwork(specification.path, atlas)
@@ -227,6 +302,20 @@ func removeButtonLabels(atlas *image.NRGBA) {
 			pixel := atlas.NRGBAAt(12, row)
 
 			for horizontal := 30; horizontal < 82; horizontal++ {
+				atlas.SetNRGBA(horizontal, row, pixel)
+			}
+		}
+	}
+}
+
+func removeGroupLabels(atlas *image.NRGBA) {
+	// Restore the border interrupted by the captured caption, using its text-free right half.
+	for index := range 2 {
+		for vertical := range 12 {
+			row := index*28 + vertical
+			pixel := atlas.NRGBAAt(60, row)
+
+			for horizontal := 7; horizontal < 57; horizontal++ {
 				atlas.SetNRGBA(horizontal, row, pixel)
 			}
 		}

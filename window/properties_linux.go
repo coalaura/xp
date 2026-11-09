@@ -10,6 +10,10 @@ import (
 
 var linuxAtomNames = [...]string{
 	"UTF8_STRING",
+	"CLIPBOARD",
+	"TARGETS",
+	"INCR",
+	"_XP_CLIPBOARD",
 	"WM_PROTOCOLS",
 	"WM_DELETE_WINDOW",
 	"WM_TAKE_FOCUS",

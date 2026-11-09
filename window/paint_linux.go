@@ -7,9 +7,7 @@ import (
 	"slices"
 
 	"github.com/coalaura/xp/theme"
-	"github.com/coalaura/xp/ui"
 	"github.com/jezek/xgb/xproto"
-	"golang.org/x/image/font"
 )
 
 type pixelEncoder struct {
@@ -35,7 +33,11 @@ func (app *application) paint() error {
 	theme.Draw(app.surface, app.layout, app.state)
 
 	app.drawTitle()
-	app.drawControls()
+
+	err := app.drawControls()
+	if err != nil {
+		return err
+	}
 
 	stride := app.pixels.stride(width)
 	maximumPayload := int(xproto.Setup(app.connection).MaximumRequestLength)*4 - 27
@@ -75,62 +77,6 @@ func (app *application) drawTitle() {
 	}
 
 	drawSingleLine(app.surface, app.fonts.title, app.options.Title, rectangle, rectangle, foreground, false)
-}
-
-func (app *application) drawControls() {
-	surface := app.surface.Clipped(app.layout.Content)
-
-	for index := range app.controls {
-		control := &app.controls[index]
-
-		rectangle := control.Rectangle(app.layout, app.options.Width, app.options.Height)
-
-		pressed := app.controlPressed == index && (app.keyboardPress || app.controlHot == index)
-		focused := app.controlFocus == index && app.showFocus && app.state.Active
-
-		state := ui.State{Hot: app.controlHot == index, Pressed: pressed, Focused: focused}
-
-		ui.Draw(surface, app.layout, rectangle, *control, state)
-
-		face := app.fonts.regular
-
-		if control.Bold {
-			face = app.fonts.bold
-		}
-
-		foreground := uint32(0)
-
-		if control.Disabled {
-			foreground = 0xACA899
-		}
-
-		switch control.Kind {
-		case ui.Label:
-			drawWrappedText(app.surface, face, control.Text, rectangle, rectangle.Intersect(app.layout.Content), foreground)
-		case ui.Button:
-			textBounds := rectangle.Inset(app.layout.Scale(3))
-
-			if pressed {
-				textBounds = textBounds.Add(image.Pt(app.layout.Scale(1), app.layout.Scale(1)))
-			}
-
-			drawSingleLine(app.surface, face, control.Text, textBounds, textBounds.Intersect(app.layout.Content), foreground, true)
-		case ui.Checkbox:
-			textBounds := rectangle
-			textBounds.Min.X = ui.CheckboxBounds(app.layout, rectangle).Max.X + app.layout.Scale(4)
-
-			drawSingleLine(app.surface, face, control.Text, textBounds, textBounds.Intersect(app.layout.Content), foreground, false)
-
-			if focused && control.Text != "" {
-				textWidth := min(font.MeasureString(face, control.Text).Ceil(), textBounds.Dx())
-				textHeight := (face.Metrics().Ascent + face.Metrics().Descent).Ceil()
-				top := textBounds.Min.Y + (textBounds.Dy()-textHeight)/2
-				focusBounds := image.Rect(textBounds.Min.X, top, textBounds.Min.X+textWidth, top+textHeight)
-
-				ui.DrawFocus(surface, app.layout, focusBounds.Inset(-app.layout.Scale(1)))
-			}
-		}
-	}
 }
 
 func (encoder *pixelEncoder) initialize(setup *xproto.SetupInfo, screen *xproto.ScreenInfo) error {

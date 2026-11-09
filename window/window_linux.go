@@ -4,10 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"slices"
 
 	"github.com/coalaura/xp/theme"
-	"github.com/coalaura/xp/ui"
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
 )
@@ -15,37 +13,33 @@ import (
 const maxXDimension = 16384
 
 type application struct {
-	options        Options
-	connection     *xgb.Conn
-	screen         *xproto.ScreenInfo
-	handle         xproto.Window
-	gc             xproto.Gcontext
-	atoms          map[string]xproto.Atom
-	supported      map[xproto.Atom]bool
-	layout         theme.Layout
-	state          theme.State
-	controls       []ui.Control
-	controlHot     int
-	controlPressed int
-	controlFocus   int
-	keyboardPress  bool
-	showFocus      bool
-	keys           [256]bool
-	keysyms        []xproto.Keysym
-	keysymsPerKey  int
-	firstKeycode   int
-	fonts          linuxFonts
-	pixels         pixelEncoder
-	surface        theme.Surface
-	dirty          bool
-	closed         bool
-	shape          bool
-	cursors        [9]xproto.Cursor
-	cursor         int
-	lastClick      xproto.Timestamp
-	lastClickX     int
-	lastClickY     int
-	drag           windowDrag
+	controlState
+	options       Options
+	connection    *xgb.Conn
+	screen        *xproto.ScreenInfo
+	handle        xproto.Window
+	gc            xproto.Gcontext
+	atoms         map[string]xproto.Atom
+	supported     map[xproto.Atom]bool
+	layout        theme.Layout
+	state         theme.State
+	keys          [256]bool
+	keysyms       []xproto.Keysym
+	keysymsPerKey int
+	firstKeycode  int
+	fonts         linuxFonts
+	pixels        pixelEncoder
+	surface       theme.Surface
+	dirty         bool
+	closed        bool
+	shape         bool
+	cursors       [11]xproto.Cursor
+	cursor        int
+	lastClick     xproto.Timestamp
+	lastClickX    int
+	lastClickY    int
+	drag          windowDrag
+	clipboard     clipboardState
 }
 
 func (app *application) createWindow() error {
@@ -139,6 +133,8 @@ func (app *application) dispatchEvent(event xgb.Event) (xgb.Event, error) {
 		}
 
 		if press, repeated := next.(xproto.KeyPressEvent); repeated && press.Detail == release.Detail && press.Time == release.Time {
+			app.keyDown(press)
+
 			return app.connection.PollForEvent()
 		}
 
@@ -174,6 +170,8 @@ func (app *application) handleEvent(event xgb.Event) error {
 	case xproto.ClientMessageEvent:
 		app.clientMessage(event)
 	case xproto.PropertyNotifyEvent:
+		app.clipboardProperty(event)
+
 		if event.Window == app.handle && event.Atom == app.atoms["_NET_WM_STATE"] {
 			app.updateWindowState()
 		}
@@ -187,6 +185,7 @@ func (app *application) handleEvent(event xgb.Event) error {
 			app.state.Active = false
 
 			app.cancelPress()
+			app.closeCombo()
 
 			clear(app.keys[:])
 		}
@@ -208,12 +207,22 @@ func (app *application) handleEvent(event xgb.Event) error {
 		if event.Request == xproto.MappingKeyboard {
 			return app.loadKeyboard()
 		}
+	case xproto.SelectionRequestEvent:
+		app.selectionRequest(event)
+	case xproto.SelectionNotifyEvent:
+		app.selectionNotify(event)
+	case xproto.SelectionClearEvent:
+		if event.Selection == app.atoms["CLIPBOARD"] {
+			app.clipboard.text = ""
+		}
 	}
 
 	return nil
 }
 
 func (app *application) resize(width, height int) {
+	app.closeCombo()
+
 	app.layout = theme.NewLayout(width, height, app.layout.DPI, app.options.Style == Dialog)
 	if app.state.Maximized {
 		app.layout = app.layout.Maximized()
@@ -253,17 +262,15 @@ func run(options Options) error {
 	}
 
 	app := &application{
-		options:        options,
-		connection:     connection,
-		screen:         screen,
-		layout:         theme.NewLayout(width, height, dpi, options.Style == Dialog),
-		controls:       slices.Clone(options.Controls),
-		controlHot:     -1,
-		controlPressed: -1,
-		controlFocus:   -1,
-		cursor:         -1,
-		dirty:          true,
+		options:    options,
+		connection: connection,
+		screen:     screen,
+		layout:     theme.NewLayout(width, height, dpi, options.Style == Dialog),
+		cursor:     -1,
+		dirty:      true,
 	}
+
+	app.initializeControls()
 
 	err = app.loadAtoms()
 	if err != nil {

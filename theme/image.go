@@ -15,11 +15,13 @@ func (surface Surface) DrawImage(destination image.Rectangle, source *image.NRGB
 		clipped = clipped.Intersect(surface.clip)
 	}
 
+	// Sample pixel centers so fractional scaling distributes repeated pixels
+	// symmetrically instead of duplicating the top and left edges first.
 	for vertical := clipped.Min.Y; vertical < clipped.Max.Y; vertical++ {
-		row := bounds.Min.Y + (vertical-destination.Min.Y)*bounds.Dy()/destination.Dy()
+		row := bounds.Min.Y + (2*(vertical-destination.Min.Y)+1)*bounds.Dy()/(2*destination.Dy())
 
 		for horizontal := clipped.Min.X; horizontal < clipped.Max.X; horizontal++ {
-			column := bounds.Min.X + (horizontal-destination.Min.X)*bounds.Dx()/destination.Dx()
+			column := bounds.Min.X + (2*(horizontal-destination.Min.X)+1)*bounds.Dx()/(2*destination.Dx())
 			offset := source.PixOffset(column, row)
 
 			color := uint32(source.Pix[offset])<<16 | uint32(source.Pix[offset+1])<<8 | uint32(source.Pix[offset+2])

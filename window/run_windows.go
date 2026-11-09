@@ -35,23 +35,17 @@ func run(options Options) error {
 	}
 
 	app := application{
-		options:        options,
-		title:          title,
-		dpi:            systemDPI(),
-		state:          theme.State{Active: true},
-		controlHot:     -1,
-		controlPressed: -1,
-		controlFocus:   -1,
+		options: options,
+		title:   title,
+		dpi:     systemDPI(),
+		state:   theme.State{Active: true},
 	}
 
 	defer app.buffer.close()
 
 	defer app.deleteFonts()
 
-	err = app.initializeControls()
-	if err != nil {
-		return err
-	}
+	app.initializeControls()
 
 	err = app.create()
 	if err != nil {

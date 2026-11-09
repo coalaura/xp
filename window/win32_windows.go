@@ -23,12 +23,19 @@ const (
 	wmNCHitTest       = 0x0084
 	wmNCPaint         = 0x0085
 	wmNCActivate      = 0x0086
+	wmNCLButtonDown   = 0x00A1
+	wmNCLButtonDblClk = 0x00A3
 	wmSysCommand      = 0x0112
 	wmKeyDown         = 0x0100
 	wmKeyUp           = 0x0101
+	wmChar            = 0x0102
+	wmSysKeyDown      = 0x0104
+	wmSysKeyUp        = 0x0105
+	wmMouseWheel      = 0x020A
 	wmMouseMove       = 0x0200
 	wmLButtonDown     = 0x0201
 	wmLButtonUp       = 0x0202
+	wmLButtonDblClk   = 0x0203
 	wmCaptureChanged  = 0x0215
 	wmMouseLeave      = 0x02A3
 	wmDPIChanged      = 0x02E0
@@ -152,6 +159,14 @@ var (
 	drawText                     = user32.NewProc("DrawTextW")
 	endPaint                     = user32.NewProc("EndPaint")
 	getClientRect                = user32.NewProc("GetClientRect")
+	getDC                        = user32.NewProc("GetDC")
+	releaseDC                    = user32.NewProc("ReleaseDC")
+	getCursorPos                 = user32.NewProc("GetCursorPos")
+	openClipboard                = user32.NewProc("OpenClipboard")
+	closeClipboard               = user32.NewProc("CloseClipboard")
+	emptyClipboard               = user32.NewProc("EmptyClipboard")
+	getClipboardData             = user32.NewProc("GetClipboardData")
+	setClipboardData             = user32.NewProc("SetClipboardData")
 	getDPIForSystem              = user32.NewProc("GetDpiForSystem")
 	getDPIForWindow              = user32.NewProc("GetDpiForWindow")
 	getMessage                   = user32.NewProc("GetMessageW")
@@ -196,6 +211,12 @@ var (
 	setTextColor       = gdi32.NewProc("SetTextColor")
 
 	getModuleHandle       = kernel32.NewProc("GetModuleHandleW")
+	globalAlloc           = kernel32.NewProc("GlobalAlloc")
+	globalFree            = kernel32.NewProc("GlobalFree")
+	globalLock            = kernel32.NewProc("GlobalLock")
+	globalUnlock          = kernel32.NewProc("GlobalUnlock")
+	globalSize            = kernel32.NewProc("GlobalSize")
+	moveMemory            = kernel32.NewProc("RtlMoveMemory")
 	dwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
 )
 

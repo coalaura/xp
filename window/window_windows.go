@@ -9,25 +9,23 @@ import (
 )
 
 type application struct {
-	handle          uintptr
-	options         Options
-	title           []uint16
-	dpi             int
-	layout          theme.Layout
-	state           theme.State
-	regionLayout    theme.Layout
-	regionMaximized bool
-	tracking        bool
-	buffer          drawingBuffer
-	font            uintptr
-	controls        []nativeControl
-	controlFonts    [2]uintptr
-	controlHot      int
-	controlPressed  int
-	controlFocus    int
-	keyboardPress   bool
-	showFocus       bool
-	err             error
+	controlState
+	handle           uintptr
+	options          Options
+	title            []uint16
+	dpi              int
+	layout           theme.Layout
+	state            theme.State
+	regionLayout     theme.Layout
+	regionMaximized  bool
+	tracking         bool
+	buffer           drawingBuffer
+	font             uintptr
+	controlFonts     [2]uintptr
+	textBuffer       []uint16
+	pendingSurrogate uint16
+	wheelDelta       int
+	err              error
 }
 
 var (
@@ -38,12 +36,16 @@ var (
 	controlFace, _ = syscall.UTF16PtrFromString("Tahoma")
 	instance       uintptr
 	arrowCursor    uintptr
+	textCursor     uintptr
+	linkCursor     uintptr
 	applications   sync.Map
 	windowCallback = syscall.NewCallback(windowProcedure)
 )
 
 func (app *application) invalidate() {
-	invalidateRect.Call(app.handle, 0, 0)
+	if app.handle != 0 {
+		invalidateRect.Call(app.handle, 0, 0)
+	}
 }
 
 func (app *application) fail(err error) {
@@ -55,6 +57,8 @@ func (app *application) fail(err error) {
 }
 
 func (app *application) resize() {
+	app.closeCombo()
+
 	var rectangle nativeRect
 
 	getClientRect.Call(app.handle, uintptr(unsafe.Pointer(&rectangle)))
@@ -233,6 +237,8 @@ func (app *application) create() error {
 func registerWindowClass() {
 	instance, _, _ = getModuleHandle.Call(0)
 	arrowCursor, _, _ = loadCursor.Call(0, 32512)
+	textCursor, _, _ = loadCursor.Call(0, 32513)
+	linkCursor, _, _ = loadCursor.Call(0, 32649)
 	icon, _, _ := loadIcon.Call(0, 32512)
 
 	class := windowClass{
@@ -287,6 +293,7 @@ func windowProcedure(handle uintptr, message uint32, wparam uintptr, lparam unsa
 		app.state.Active = uint16(wparam) != 0
 		if !app.state.Active {
 			app.cancelPress()
+			app.closeCombo()
 		}
 
 		app.invalidate()
@@ -300,9 +307,12 @@ func windowProcedure(handle uintptr, message uint32, wparam uintptr, lparam unsa
 		return 0
 	case wmNCHitTest:
 		return app.hitTest(uintptr(lparam))
+	case wmNCLButtonDown, wmNCLButtonDblClk:
+		app.cancelPress()
+		app.clearControlFocus()
 	case wmSetCursor:
 		if uint16(uintptr(lparam)) == hitClient {
-			setCursor.Call(arrowCursor)
+			setCursor.Call(app.clientCursor())
 
 			return 1
 		}
@@ -318,7 +328,8 @@ func windowProcedure(handle uintptr, message uint32, wparam uintptr, lparam unsa
 		app.invalidate()
 
 		return 0
-	case wmLButtonDown:
+	case wmLButtonDown, wmLButtonDblClk:
+		// CS_DBLCLKS replaces the second mouse-down with a double-click message.
 		app.mouseDown(uintptr(lparam))
 
 		return 0
@@ -328,13 +339,32 @@ func windowProcedure(handle uintptr, message uint32, wparam uintptr, lparam unsa
 		return 0
 	case wmCancelMode:
 		app.cancelPress()
+		app.closeCombo()
 	case wmCaptureChanged:
 		app.state.Pressed = theme.NoButton
 		app.controlPressed = -1
+		app.comboDragging = false
+		app.keyboardPress = false
 
 		app.invalidate()
 	case wmKeyDown:
 		app.keyDown(wparam, uintptr(lparam))
+
+		return 0
+	case wmSysKeyDown, wmSysKeyUp:
+		if app.controlFocus >= 0 && (wparam == 0x26 || wparam == 0x28) {
+			if message == wmSysKeyDown {
+				app.keyDown(wparam, uintptr(lparam))
+			}
+
+			return 0
+		}
+	case wmChar:
+		app.character(uint16(wparam))
+
+		return 0
+	case wmMouseWheel:
+		app.mouseWheel(wparam, uintptr(lparam))
 
 		return 0
 	case wmKeyUp:
@@ -345,8 +375,10 @@ func windowProcedure(handle uintptr, message uint32, wparam uintptr, lparam unsa
 		app.invalidate()
 	case wmKillFocus:
 		app.cancelPress()
+		app.closeCombo()
 
 		app.showFocus = false
+		app.pendingSurrogate = 0
 
 		app.invalidate()
 	case wmClose:

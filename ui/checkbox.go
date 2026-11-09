@@ -27,9 +27,17 @@ func drawCheckbox(surface theme.Surface, layout theme.Layout, rectangle image.Re
 		index = 1
 	}
 
-	if control.Checked {
+	if control.Mixed && control.Kind == Checkbox {
+		index += 8
+	} else if control.Checked {
 		index += 4
 	}
 
-	surface.DrawImage(bounds, checkboxArtwork, image.Rect(0, index*13, 13, (index+1)*13))
+	atlas := checkboxArtwork
+
+	if control.Kind == Radio {
+		atlas = radioArtwork
+	}
+
+	surface.DrawImage(bounds, atlas, image.Rect(0, index*13, 13, (index+1)*13))
 }

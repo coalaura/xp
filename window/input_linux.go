@@ -2,8 +2,10 @@ package window
 
 import (
 	"image"
+	"unicode"
 
 	"github.com/coalaura/xp/theme"
+	"github.com/coalaura/xp/ui"
 	"github.com/jezek/xgb/xproto"
 )
 
@@ -42,8 +44,8 @@ func (app *application) initializeCursors() {
 
 	defer xproto.CloseFont(app.connection, fontID)
 
-	// Cursor-font glyphs follow the EWMH resize directions, then the default pointer.
-	glyphs := [...]uint16{134, 138, 136, 96, 14, 16, 12, 70, 68}
+	// Cursor-font glyphs follow the EWMH resize directions, then arrow, text and hand.
+	glyphs := [...]uint16{134, 138, 136, 96, 14, 16, 12, 70, 68, 152, 60}
 
 	for index, glyph := range glyphs {
 		cursor, cursorError := xproto.NewCursorId(app.connection)
@@ -62,6 +64,23 @@ func (app *application) updateCursor(point image.Point) {
 	direction := app.resizeDirection(point)
 	if direction < 0 {
 		direction = 8
+
+		index := app.controlAt(point)
+		if index >= 0 {
+			switch app.controls[index].Kind {
+			case ui.Input:
+				direction = 9
+			case ui.Link:
+				direction = 10
+			}
+		}
+
+		if app.comboOpen >= 0 {
+			bounds, _ := app.comboBounds()
+			if point.In(bounds) {
+				direction = 8
+			}
+		}
 	}
 
 	if direction != app.cursor {
@@ -109,13 +128,25 @@ func (app *application) resizeDirection(point image.Point) int {
 }
 
 func (app *application) buttonDown(event xproto.ButtonPressEvent) {
+	point := image.Pt(int(event.EventX), int(event.EventY))
+
+	if event.Detail == 4 || event.Detail == 5 {
+		steps := 1
+
+		if event.Detail == 5 {
+			steps = -1
+		}
+
+		app.controlWheel(point, steps)
+
+		return
+	}
+
 	if event.Detail != xproto.ButtonIndex1 {
 		return
 	}
 
 	app.cancelPress()
-
-	point := image.Pt(int(event.EventX), int(event.EventY))
 
 	if app.supported[app.atoms["_NET_ACTIVE_WINDOW"]] {
 		app.sendRootMessage("_NET_ACTIVE_WINDOW", 1, uint32(event.Time))
@@ -125,6 +156,8 @@ func (app *application) buttonDown(event xproto.ButtonPressEvent) {
 
 	button := app.layout.ButtonAt(point)
 	if button != theme.NoButton {
+		app.clearControlFocus()
+
 		app.state.Pressed = button
 		app.state.Hot = button
 		app.dirty = true
@@ -134,12 +167,15 @@ func (app *application) buttonDown(event xproto.ButtonPressEvent) {
 
 	direction := app.resizeDirection(point)
 	if direction >= 0 {
+		app.clearControlFocus()
 		app.beginDrag(event, direction)
 
 		return
 	}
 
 	if point.Y < app.layout.Caption {
+		app.clearControlFocus()
+
 		distance := app.layout.Scale(4)
 		doubleClick := app.lastClick != 0 && uint32(event.Time-app.lastClick) <= 400 && abs(point.X-app.lastClickX) <= distance && abs(point.Y-app.lastClickY) <= distance
 
@@ -160,14 +196,7 @@ func (app *application) buttonDown(event xproto.ButtonPressEvent) {
 
 	app.lastClick = 0
 
-	index := app.controlAt(point)
-	if index >= 0 {
-		app.controlHot = index
-		app.controlPressed = index
-		app.controlFocus = index
-		app.showFocus = false
-		app.dirty = true
-	}
+	app.controlDown(point, event.State&xproto.ModMaskShift != 0)
 }
 
 func (app *application) buttonUp(event xproto.ButtonReleaseEvent) {
@@ -176,9 +205,14 @@ func (app *application) buttonUp(event xproto.ButtonReleaseEvent) {
 	}
 
 	point := image.Pt(int(event.EventX), int(event.EventY))
+
 	button := app.state.Pressed
-	control := app.controlPressed
-	keyboard := app.keyboardPress
+	if button == theme.NoButton && !app.drag.active {
+		app.controlUp(point)
+		app.updateCursor(point)
+
+		return
+	}
 
 	app.cancelPress()
 	app.updateCursor(point)
@@ -193,10 +227,6 @@ func (app *application) buttonUp(event xproto.ButtonReleaseEvent) {
 			app.toggleMaximize()
 		}
 	}
-
-	if !keyboard && control >= 0 && control == app.controlAt(point) {
-		app.activateControl(control)
-	}
 }
 
 func (app *application) pointerMotion(event xproto.MotionNotifyEvent) {
@@ -207,6 +237,7 @@ func (app *application) pointerMotion(event xproto.MotionNotifyEvent) {
 	}
 
 	point := image.Pt(int(event.EventX), int(event.EventY))
+	app.controlMove(point)
 
 	button := app.layout.ButtonAt(point)
 	control := app.controlAt(point)
@@ -224,6 +255,7 @@ func (app *application) cancelPress() {
 	app.state.Pressed = theme.NoButton
 	app.controlPressed = -1
 	app.keyboardPress = false
+	app.comboDragging = false
 	app.drag.active = false
 	app.dirty = true
 }
@@ -325,55 +357,146 @@ func (app *application) loadKeyboard() error {
 	return nil
 }
 
-func (app *application) keySymbol(code xproto.Keycode) xproto.Keysym {
+func (app *application) keySymbol(code xproto.Keycode, state uint16) xproto.Keysym {
 	index := (int(code) - app.firstKeycode) * app.keysymsPerKey
 	if index < 0 || index >= len(app.keysyms) {
 		return 0
 	}
 
-	return app.keysyms[index]
+	symbol := app.keysyms[index]
+	shifted := xproto.Keysym(0)
+
+	if state&xproto.ModMask5 != 0 && app.keysymsPerKey >= 4 && app.keysyms[index+2] != 0 {
+		index += 2
+		symbol = app.keysyms[index]
+	}
+
+	if app.keysymsPerKey > 1 {
+		shifted = app.keysyms[index+1]
+	}
+
+	if shifted == 0 {
+		shifted = xproto.Keysym(unicode.ToUpper(rune(symbol)))
+	}
+
+	if state&xproto.ModMaskShift != 0 {
+		symbol = shifted
+	}
+
+	if state&xproto.ModMask2 != 0 && shifted >= 0xff80 && shifted <= 0xffbd {
+		symbol = shifted
+
+		if state&xproto.ModMaskShift != 0 {
+			symbol = app.keysyms[index]
+		}
+	}
+
+	if state&xproto.ModMaskLock != 0 && unicode.IsLetter(rune(symbol)) {
+		if state&xproto.ModMaskShift != 0 {
+			symbol = xproto.Keysym(unicode.ToLower(rune(symbol)))
+		} else {
+			symbol = xproto.Keysym(unicode.ToUpper(rune(symbol)))
+		}
+	}
+
+	return symbol
 }
 
 func (app *application) keyDown(event xproto.KeyPressEvent) {
-	if app.keys[event.Detail] {
-		return
-	}
-
+	repeat := app.keys[event.Detail]
 	app.keys[event.Detail] = true
 
-	if event.State&(xproto.ModMaskControl|xproto.ModMask1|xproto.ModMask4) != 0 {
+	if event.State&xproto.ModMask4 != 0 {
 		return
 	}
 
-	symbol := app.keySymbol(event.Detail)
+	symbol := app.keySymbol(event.Detail, event.State)
 
-	switch symbol {
-	case keyTab, keyBackTab:
-		app.focusNext(event.State&xproto.ModMaskShift != 0 || symbol == keyBackTab)
-	case keyReturn, keyKPEnter:
-		app.activateDefault(false)
-	case keyEscape:
-		app.cancelPress()
-		app.activateDefault(true)
-	case keySpace:
-		if app.controlFocus >= 0 && app.controlPressed < 0 {
-			app.controlPressed = app.controlFocus
-			app.keyboardPress = true
-			app.showFocus = true
-			app.dirty = true
-		}
+	modifiers := keyModifiers{
+		shift:   event.State&xproto.ModMaskShift != 0 || symbol == keyBackTab,
+		control: event.State&xproto.ModMaskControl != 0,
+		alt:     event.State&xproto.ModMask1 != 0,
+	}
+
+	app.controlKeyDown(linuxKey(symbol), modifiers, repeat)
+
+	character := keysymRune(symbol)
+	if !modifiers.control && !modifiers.alt && character >= ' ' && !unicode.IsControl(character) {
+		app.typeText(string(character))
 	}
 }
 
 func (app *application) keyUp(event xproto.KeyReleaseEvent) {
 	app.keys[event.Detail] = false
 
-	if app.keySymbol(event.Detail) == keySpace && app.keyboardPress {
-		index := app.controlPressed
+	app.controlKeyUp(linuxKey(app.keySymbol(event.Detail, event.State)))
+}
 
-		app.cancelPress()
-		app.activateControl(index)
+func linuxKey(symbol xproto.Keysym) controlKey {
+	switch symbol {
+	case keyTab, keyBackTab:
+		return controlTab
+	case keyReturn, keyKPEnter:
+		return controlEnter
+	case keyEscape:
+		return controlEscape
+	case 0xff08:
+		return controlBackspace
+	case 0xffff, 0xff9f:
+		return controlDelete
+	case 0xff50, 0xff95:
+		return controlHome
+	case 0xff57, 0xff9c:
+		return controlEnd
+	case 0xff51, 0xff96:
+		return controlLeft
+	case 0xff52, 0xff97:
+		return controlUp
+	case 0xff53, 0xff98:
+		return controlRight
+	case 0xff54, 0xff99:
+		return controlDown
+	case 0xff55, 0xff9a:
+		return controlPageUp
+	case 0xff56, 0xff9b:
+		return controlPageDown
+	case 0xffc1:
+		return controlF4
 	}
+
+	return controlKey(unicode.ToLower(keysymRune(symbol)))
+}
+
+func keysymRune(symbol xproto.Keysym) rune {
+	if symbol >= 0x20 && symbol <= 0x7E || symbol >= 0xA0 && symbol <= 0xFF {
+		return rune(symbol)
+	}
+
+	if symbol&0xFF000000 == 0x01000000 {
+		character := rune(symbol & 0xFFFFFF)
+		if character <= unicode.MaxRune && (character < 0xD800 || character > 0xDFFF) {
+			return character
+		}
+	}
+
+	if symbol >= 0xffb0 && symbol <= 0xffb9 {
+		return rune('0' + symbol - 0xffb0)
+	}
+
+	switch symbol {
+	case 0xffaa:
+		return '*'
+	case 0xffab:
+		return '+'
+	case 0xffad:
+		return '-'
+	case 0xffae:
+		return '.'
+	case 0xffaf:
+		return '/'
+	}
+
+	return 0
 }
 
 func abs(value int) int {
