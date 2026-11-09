@@ -800,7 +800,7 @@ int Run() {
     RECT work = {};
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
     int x = Max(work.left, work.left + (work.right - work.left - width) / 2), y = Max(work.top, work.top + (work.bottom - work.top - height) / 2);
-    mainWindow = CreateWindowExW(0, L"XPControlsAtlas", L"Windows XP - UI State Atlas v2.1 (C++)", style, x, y, width, height, NULL, NULL, instance, NULL);
+    mainWindow = CreateWindowExW(0, L"XPControlsAtlas", L"Windows XP - UI State Atlas", style, x, y, width, height, NULL, NULL, instance, NULL);
     if (!mainWindow)
         Fatal(L"Create window");
     titleWindow = CreateWindowExW(0, L"STATIC", L"Windows XP UI state atlas", WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, mainWindow, NULL, instance, NULL);
