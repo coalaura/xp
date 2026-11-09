@@ -22,6 +22,13 @@ type artwork struct {
 
 var artworks = []artwork{
 	{
+		path: "theme/icon.png",
+		crops: []crop{
+			{file: "09_frames", bounds: image.Rect(33, 94, 49, 110)},
+			{file: "00_inactive", bounds: image.Rect(33, 94, 49, 110)},
+		},
+	},
+	{
 		path: "theme/caption.png",
 		crops: []crop{
 			{file: "09_frames", bounds: image.Rect(923, 92, 944, 113)},
@@ -69,8 +76,6 @@ var artworks = []artwork{
 			{file: "01_buttons", bounds: image.Rect(685, 249, 797, 275)},
 			{file: "01_buttons", bounds: image.Rect(832, 249, 944, 275)},
 		},
-		// Keep the ends and a text-free center column for nine-slice rendering.
-		columns: []int{0, 1, 2, 3, 12, 108, 109, 110, 111},
 	},
 	{
 		path: "theme/frame.png",
@@ -106,9 +111,12 @@ var artworks = []artwork{
 	{
 		path: "theme/title.png",
 		crops: []crop{
-			{file: "09_frames", bounds: image.Rect(500, 86, 501, 116)},
-			{file: "00_inactive", bounds: image.Rect(500, 86, 501, 116)},
+			{file: "09_frames", bounds: image.Rect(28, 86, 996, 116)},
+			{file: "00_inactive", bounds: image.Rect(28, 86, 996, 116)},
 		},
+		// Preserve the native corner shading and icon, then a text-free center
+		// and the right edge beyond the close button.
+		columns: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 472, 962, 963, 964, 965, 966, 967},
 	},
 	{
 		path: "theme/title_maximized.png",
@@ -140,6 +148,14 @@ func generate() error {
 			restoreInactive(atlas, captures)
 		}
 
+		if specification.path == "theme/icon.png" {
+			atlas = transparentIcon(atlas)
+		}
+
+		if specification.path == "ui/button.png" {
+			removeButtonLabels(atlas)
+		}
+
 		err = writeArtwork(specification.path, atlas)
 		if err != nil {
 			return err
@@ -156,6 +172,7 @@ func extractArtwork(specification artwork, captures map[string]image.Image) (*im
 
 	size := specification.crops[0].bounds.Size()
 	width := size.X
+
 	if specification.columns != nil {
 		width = len(specification.columns)
 	}
@@ -188,6 +205,7 @@ func extractArtwork(specification artwork, captures map[string]image.Image) (*im
 		for vertical := range size.Y {
 			for horizontal := range width {
 				column := horizontal
+
 				if specification.columns != nil {
 					column = specification.columns[horizontal]
 				}
@@ -198,6 +216,38 @@ func extractArtwork(specification artwork, captures map[string]image.Image) (*im
 	}
 
 	return atlas, nil
+}
+
+func removeButtonLabels(atlas *image.NRGBA) {
+	// Only the flat interior behind the labels repeats horizontally. Keep the
+	// full borders and shadows, whose shading differs across the button width.
+	for index := range 5 {
+		for vertical := 4; vertical < 22; vertical++ {
+			row := index*26 + vertical
+			pixel := atlas.NRGBAAt(12, row)
+
+			for horizontal := 30; horizontal < 82; horizontal++ {
+				atlas.SetNRGBA(horizontal, row, pixel)
+			}
+		}
+	}
+}
+
+func transparentIcon(atlas *image.NRGBA) *image.NRGBA {
+	icon := image.NewNRGBA(image.Rect(0, 0, 16, 16))
+
+	// The stock icon is unchanged between active and inactive captions; the
+	// differing pixels are its transparent background, not part of the icon.
+	for vertical := range 16 {
+		for horizontal := range 16 {
+			pixel := atlas.NRGBAAt(horizontal, vertical)
+			if pixel == atlas.NRGBAAt(horizontal, vertical+16) {
+				icon.SetNRGBA(horizontal, vertical, pixel)
+			}
+		}
+	}
+
+	return icon
 }
 
 func restoreInactive(atlas *image.NRGBA, captures map[string]image.Image) {
@@ -217,6 +267,7 @@ func restoreInactive(atlas *image.NRGBA, captures map[string]image.Image) {
 			}
 
 			bestDistance := int(^uint(0) >> 1)
+
 			var matched color.Color
 
 			for candidate := 3; candidate < 18; candidate++ {

@@ -25,20 +25,29 @@ func DrawFocus(surface theme.Surface, layout theme.Layout, rectangle image.Recta
 	}
 }
 
-func drawReferenceButton(surface theme.Surface, layout theme.Layout, rectangle image.Rectangle, hot bool) {
-	left := min(layout.Scale(4), rectangle.Dx()/2)
-	top := min(layout.Scale(3), rectangle.Dy()/2)
+func drawReferenceButton(surface theme.Surface, layout theme.Layout, rectangle image.Rectangle, control Control, state State) {
+	left := min(layout.Scale(7), rectangle.Dx()/2)
+	top := min(layout.Scale(7), rectangle.Dy()/2)
 
 	columns := [...]int{rectangle.Min.X, rectangle.Min.X + left, rectangle.Max.X - left, rectangle.Max.X}
 	rows := [...]int{rectangle.Min.Y, rectangle.Min.Y + top, rectangle.Max.Y - top, rectangle.Max.Y}
 
-	sourceColumns := [...]int{0, 4, 5, 9}
-	sourceRows := [...]int{0, 3, 18, 21}
-	offset := 0
+	sourceColumns := [...]int{0, 7, 105, 112}
+	sourceRows := [...]int{0, 7, 19, 26}
+	index := 0
 
-	if hot {
-		offset = 21
+	switch {
+	case control.Disabled:
+		index = 3
+	case state.Pressed:
+		index = 2
+	case state.Hot:
+		index = 1
+	case control.Default:
+		index = 4
 	}
+
+	offset := index * 26
 
 	// Keep the corners fixed while stretching the text-free edges and center.
 	for vertical := range 3 {

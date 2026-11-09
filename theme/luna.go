@@ -54,74 +54,6 @@ type Layout struct {
 	maximized bool
 }
 
-type gradientStop struct {
-	position int
-	color    uint32
-}
-
-var (
-	activeCaption = [...]gradientStop{
-		{position: 0, color: 0x0058EE},
-		{position: 1, color: 0x3F97FF},
-		{position: 2, color: 0x2B90FF},
-		{position: 3, color: 0x0372FF},
-		{position: 4, color: 0x0365F1},
-		{position: 5, color: 0x005CE9},
-		{position: 6, color: 0x0058E6},
-		{position: 7, color: 0x0054E3},
-		{position: 9, color: 0x0054E3},
-		{position: 10, color: 0x0055E5},
-		{position: 14, color: 0x0055E5},
-		{position: 15, color: 0x0055EA},
-		{position: 16, color: 0x0055EA},
-		{position: 17, color: 0x0058EE},
-		{position: 18, color: 0x005BF2},
-		{position: 19, color: 0x005AF5},
-		{position: 20, color: 0x0060F9},
-		{position: 21, color: 0x0164F9},
-		{position: 22, color: 0x026AFE},
-		{position: 25, color: 0x026AFE},
-		{position: 26, color: 0x0065FD},
-		{position: 27, color: 0x0060FC},
-		{position: 28, color: 0x004DE3},
-		{position: 29, color: 0x0043CF},
-	}
-
-	inactiveCaption = [...]gradientStop{
-		{position: 0, color: 0x688DE0},
-		{position: 1, color: 0x98B2E8},
-		{position: 2, color: 0x9DB9EB},
-		{position: 3, color: 0x8AACE7},
-		{position: 4, color: 0x7EA2E4},
-		{position: 5, color: 0x7B9DE1},
-		{position: 6, color: 0x7A99E0},
-		{position: 7, color: 0x7996DE},
-		{position: 9, color: 0x7996DE},
-		{position: 10, color: 0x7A96DF},
-		{position: 12, color: 0x7A96DF},
-		{position: 13, color: 0x7A96E0},
-		{position: 14, color: 0x7B97E0},
-		{position: 15, color: 0x7B99E1},
-		{position: 16, color: 0x7B99E1},
-		{position: 17, color: 0x7D9BE3},
-		{position: 18, color: 0x7D9BE3},
-		{position: 19, color: 0x7F9FE6},
-		{position: 20, color: 0x7FA2E6},
-		{position: 21, color: 0x80A5E7},
-		{position: 22, color: 0x81A7E8},
-		{position: 23, color: 0x82A9E9},
-		{position: 24, color: 0x82A9E9},
-		{position: 25, color: 0x81A7E8},
-		{position: 26, color: 0x80A5E7},
-		{position: 27, color: 0x7E9DE5},
-		{position: 28, color: 0x7A93DF},
-		{position: 29, color: 0x7A93DF},
-	}
-
-	activeMaximizedCaption   = [...]uint32{0x3E96FF, 0x2C8AFF, 0x0370FF, 0x0465F1, 0x015CE9, 0x005AE7, 0x0055E3, 0x0055E3, 0x0055E3, 0x0055E6, 0x0055E6, 0x0056E8, 0x0054EC, 0x0055F1, 0x005AF2, 0x015DF4, 0x005DF9, 0x0162FA, 0x0269FE, 0x036CFE, 0x036CFE, 0x0269FE, 0x0266FB, 0x0162FA, 0x014DE1, 0x0043CF}
-	inactiveMaximizedCaption = [...]uint32{0x99B3E9, 0x9DB9EB, 0x88AEE9, 0x7EA1E5, 0x7B9CE1, 0x7998DF, 0x7998DF, 0x7A97DF, 0x7A97DF, 0x7A97E0, 0x7A97E0, 0x7B98E1, 0x7C99E2, 0x7C99E2, 0x7E9BE5, 0x7E9EE5, 0x7FA1E6, 0x80A4E7, 0x81A8E9, 0x81A9E8, 0x82ABE9, 0x81A9E8, 0x80A6E8, 0x7E9EE5, 0x7A95DF, 0x7A95DF}
-)
-
 // Fill paints the clipped rectangle with a 0x00RRGGBB color.
 func (surface Surface) Fill(rectangle image.Rectangle, color uint32) {
 	rectangle = rectangle.Intersect(image.Rect(0, 0, surface.Width, surface.Height))
@@ -224,7 +156,7 @@ func NewLayout(width, height, dpi int, dialog bool) Layout {
 	layout.Content = image.Rect(layout.Border, layout.Caption, width-layout.Border, height-layout.Border)
 
 	if !dialog {
-		layout.Icon = image.Rect(layout.Scale(6), layout.Scale(8), layout.Scale(22), layout.Scale(24))
+		layout.Icon = image.Rect(layout.Scale(5), layout.Scale(8), layout.Scale(21), layout.Scale(24))
 	}
 
 	right := width - layout.Scale(buttonMargin)
@@ -244,17 +176,30 @@ func NewLayout(width, height, dpi int, dialog bool) Layout {
 func Draw(surface Surface, layout Layout, state State) {
 	surface.Fill(image.Rect(0, 0, surface.Width, surface.Height), Background)
 
-	stops := activeCaption[:]
-	outer := uint32(0x00138C)
-	inner := uint32(0x0855DD)
-	highlight := uint32(0x3D95FF)
+	atlas := titleArtwork
+	height := 30
+	center := 26
+
+	if layout.maximized {
+		atlas = titleMaximizedArtwork
+		height = 24
+		center = 0
+	}
+
+	offset := 0
 
 	if !state.Active {
-		stops = inactiveCaption[:]
-		outer = 0x4F53BC
-		inner = 0x758CDC
-		highlight = 0x98B2E8
+		offset = height
 	}
+
+	left := 26
+
+	if layout.Dialog {
+		left = 4
+	}
+
+	leftWidth := min(layout.Scale(left), layout.Width/2)
+	rightWidth := min(layout.Scale(6), layout.Width/2)
 
 	for vertical := 0; vertical < layout.Caption; vertical++ {
 		logical := min(29, vertical*96/layout.DPI)
@@ -263,41 +208,28 @@ func Draw(surface Surface, layout Layout, state State) {
 			logical++
 		}
 
-		color := gradient(stops, logical)
-
 		if layout.maximized {
-			row := min(25, vertical*96/layout.DPI)
-			color = activeMaximizedCaption[row]
-
-			if !state.Active {
-				color = inactiveMaximizedCaption[row]
-			}
+			logical = min(height-1, vertical*height/layout.Caption)
 		}
 
-		surface.Fill(image.Rect(0, vertical, layout.Width, vertical+1), color)
-	}
+		pixel := atlas.NRGBAAt(center, offset+logical)
+		color := uint32(pixel.R)<<16 | uint32(pixel.G)<<8 | uint32(pixel.B)
 
-	one := layout.Scale(1)
+		surface.Fill(image.Rect(0, vertical, layout.Width, vertical+1), color)
+
+		if !layout.maximized {
+			row := offset + logical
+
+			surface.DrawImage(image.Rect(0, vertical, leftWidth, vertical+1), atlas, image.Rect(0, row, left, row+1))
+			surface.DrawImage(image.Rect(layout.Width-rightWidth, vertical, layout.Width, vertical+1), atlas, image.Rect(27, row, 33, row+1))
+		}
+	}
 
 	if !layout.maximized {
 		drawBorders(surface, layout, state.Active)
-
-		surface.Fill(image.Rect(0, layout.Scale(8), one, layout.Caption), outer)
-		surface.Fill(image.Rect(layout.Width-one, layout.Scale(8), layout.Width, layout.Caption), outer)
-
-		// Stepped corner highlights match Luna's small, pixel-aligned top radius.
-		for step := range 5 {
-			inset := [...]int{5, 3, 2, 1, 1}[step]
-
-			vertical := layout.Scale(step)
-			bottom := layout.Scale(step + 1)
-
-			surface.Fill(image.Rect(layout.Scale(inset), vertical, layout.Scale(inset+1), bottom), highlight)
-			surface.Fill(image.Rect(layout.Width-layout.Scale(inset+1), vertical, layout.Width-layout.Scale(inset), bottom), inner)
-		}
 	}
 
-	if !layout.Icon.Empty() {
+	if layout.maximized && !layout.Icon.Empty() {
 		drawIcon(surface, layout)
 	}
 
@@ -312,35 +244,30 @@ func drawBorders(surface Surface, layout Layout, active bool) {
 	atlas := frameArtwork
 	bottomAtlas := bottomArtwork
 
+	border := 4
+
+	if layout.Dialog {
+		atlas = dialogArtwork
+		bottomAtlas = dialogBottomArtwork
+		border = 3
+	}
+
+	height := atlas.Rect.Dy() / 2
+
 	var (
 		top       int
 		bottomTop int
 	)
-
-	height := 570
-	border := 4
 
 	if !active {
 		top = height
 		bottomTop = border
 	}
 
-	if layout.Dialog && active {
-		atlas = dialogArtwork
-		bottomAtlas = dialogBottomArtwork
-		height = 161
-		border = 3
-	}
-
 	bottom := top + height
 
 	leftSource := image.Rect(0, top, border, bottom-border)
 	rightSource := image.Rect(border+1, top, 2*border+1, bottom-border)
-
-	if layout.Dialog && !active {
-		leftSource.Min.X++
-		rightSource.Max.X--
-	}
 
 	surface.DrawImage(image.Rect(0, layout.Caption, layout.Border, layout.Height-layout.Border), atlas, leftSource)
 	surface.DrawImage(image.Rect(layout.Width-layout.Border, layout.Caption, layout.Width, layout.Height-layout.Border), atlas, rightSource)
@@ -353,20 +280,7 @@ func drawBorders(surface Surface, layout Layout, active bool) {
 }
 
 func drawIcon(surface Surface, layout Layout) {
-	left := layout.Icon.Min.X
-	top := layout.Icon.Min.Y
-
-	fill := func(x, y, width, height int, color uint32) {
-		surface.Fill(image.Rect(left+layout.Scale(x), top+layout.Scale(y), left+layout.Scale(x+width), top+layout.Scale(y+height)), color)
-	}
-
-	fill(0, 1, 16, 14, 0x173A80)
-	fill(1, 2, 14, 12, 0xFFFFFF)
-	fill(1, 2, 14, 3, 0x3487EE)
-	fill(2, 6, 12, 7, 0xECE9D8)
-	fill(3, 7, 3, 5, 0x6C9BE3)
-	fill(7, 7, 6, 1, 0xACA899)
-	fill(7, 10, 5, 1, 0xACA899)
+	surface.DrawImage(layout.Icon, iconArtwork, iconArtwork.Bounds())
 }
 
 func drawButton(surface Surface, layout Layout, state State, button Button) {
@@ -397,28 +311,9 @@ func drawButton(surface Surface, layout Layout, state State, button Button) {
 	if !state.Active {
 		atlas = inactiveArtwork
 		sprite /= 3
-
-		if layout.maximized {
-			atlas = inactiveMaximizedArtwork
-			sprite = int(button) - 1
-		}
 	}
 
 	surface.DrawImage(rectangle, atlas, image.Rect(0, sprite*21, 21, (sprite+1)*21))
-}
-
-func gradient(stops []gradientStop, position int) uint32 {
-	for index := 1; index < len(stops); index++ {
-		if position <= stops[index].position {
-			previous := stops[index-1]
-			next := stops[index]
-			amount := (position - previous.position) * 255 / (next.position - previous.position)
-
-			return blend(previous.color, next.color, amount)
-		}
-	}
-
-	return stops[len(stops)-1].color
 }
 
 func blend(first, second uint32, amount int) uint32 {
