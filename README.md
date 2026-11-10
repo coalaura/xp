@@ -10,7 +10,7 @@ A small Go library for desktop windows with Windows XP's blue Luna look, plus a 
 
 ## Try the demo
 
-Requires Go 1.27.3 or newer. From the repository root:
+Requires Go 1.26 or newer. From the repository root:
 
 ```sh
 go run .
